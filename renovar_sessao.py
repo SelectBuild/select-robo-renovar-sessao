@@ -96,10 +96,30 @@ def main():
         inicio = time.time()
         logado = False
         while time.time() - inicio < TIMEOUT_SEGUNDOS:
-            na_app = "meudinheiroweb.com.br" in page.url
-            if na_app and page.locator("input[name='email']").count() == 0:
+            try:
+                sem_formulario = (
+                    "meudinheiroweb.com.br" in page.url
+                    and page.locator("input[name='email']").count() == 0
+                )
+            except Exception:
+                # A página pode estar a meio de uma navegação (ex: no
+                # instante exacto em que o login termina) — o Playwright
+                # lança um erro transitório nesse momento. Não é uma
+                # falha real, só significa "ainda não dá para confirmar
+                # agora"; tenta de novo no próximo ciclo.
                 time.sleep(2)
-                if "meudinheiroweb.com.br" in page.url and page.locator("input[name='email']").count() == 0:
+                continue
+
+            if sem_formulario:
+                time.sleep(2)
+                try:
+                    ainda_sem_formulario = (
+                        "meudinheiroweb.com.br" in page.url
+                        and page.locator("input[name='email']").count() == 0
+                    )
+                except Exception:
+                    continue
+                if ainda_sem_formulario:
                     logado = True
                     break
             time.sleep(2)
