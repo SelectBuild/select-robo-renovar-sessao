@@ -1,0 +1,13 @@
+# Ambiente de desenvolvimento local
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Saída do PyInstaller — os executáveis são gerados pelo GitHub Actions
+# e publicados em Releases, nunca commitados directamente no repositório
+build/
+dist/
+*.spec
+
+.DS_Store

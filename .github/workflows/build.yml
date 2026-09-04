@@ -1,0 +1,77 @@
+name: Compilar e publicar
+
+# Compila o executável para Mac e Windows sempre que se cria uma tag
+# "vX.Y.Z", e publica-os automaticamente numa Release do GitHub.
+# "workflow_dispatch" permite correr manualmente (sem release) para
+# testar a compilação antes de decidir publicar uma versão nova.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  compilar:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            nome_gerado: RenovarSessaoSelectBuild
+            nome_final: RenovarSessaoSelectBuild-mac
+          - os: windows-latest
+            nome_gerado: RenovarSessaoSelectBuild.exe
+            nome_final: RenovarSessaoSelectBuild-windows.exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Injectar a chave de upload (secret do GitHub Actions)
+        shell: bash
+        run: |
+          sed -i.bak "s#__SESSAO_UPLOAD_KEY_PLACEHOLDER__#${SESSAO_UPLOAD_KEY}#" renovar_sessao.py
+          rm -f renovar_sessao.py.bak
+        env:
+          SESSAO_UPLOAD_KEY: ${{ secrets.SESSAO_UPLOAD_KEY }}
+
+      - name: Compilar executável
+        run: >
+          pyinstaller --onefile --console --name RenovarSessaoSelectBuild
+          --collect-all playwright renovar_sessao.py
+
+      - name: Preparar artefacto com o nome final
+        shell: bash
+        run: |
+          mkdir -p saida
+          cp "dist/${{ matrix.nome_gerado }}" "saida/${{ matrix.nome_final }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.nome_final }}
+          path: saida/${{ matrix.nome_final }}
+
+  publicar_release:
+    needs: compilar
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefactos
+
+      - name: Publicar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artefactos/*/*
+          generate_release_notes: true
