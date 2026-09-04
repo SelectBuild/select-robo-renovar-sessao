@@ -36,8 +36,6 @@ from playwright.sync_api import sync_playwright
 ROBOT_API_URL = "https://robotselect-api-222619808650.us-central1.run.app"
 SESSAO_UPLOAD_KEY = "__SESSAO_UPLOAD_KEY_PLACEHOLDER__"
 
-TIMEOUT_SEGUNDOS = 600  # 10 minutos para o utilizador fazer login com calma
-
 # Mostra um aviso grande dentro da própria janela do browser — é para
 # ali que o utilizador está a olhar durante o login, não para o
 # Terminal por trás. Sem isto, a janela fechava-se sozinha sem
@@ -116,6 +114,9 @@ def main():
 
     print("Vai abrir uma janela do browser. Faz login normalmente")
     print("(usa o formulário de Email + Senha, não o botão do Google).")
+    print("Se o Meu Dinheiro pedir um código de confirmação por email,")
+    print("preenche esse código também — só depois é que o login conta")
+    print("como concluído.")
     print()
 
     with sync_playwright() as p:
@@ -123,51 +124,43 @@ def main():
         context = browser.new_context()
         page = context.new_page()
         page.goto("https://app.meudinheiroweb.com.br")
+        mostrar_aviso(
+            page,
+            "👋 Faz login (inclui o código de confirmação, se for pedido). "
+            "Depois volta ao Terminal e prime Enter.",
+            "#0d6efd",
+        )
 
-        print("A aguardar que termines o login (até 10 minutos)...")
+        # Confirmação manual em vez de deteção automática: a app pode ter
+        # ecrãs intermédios imprevisíveis (ex: pedido de código de
+        # confirmação por email), que também não têm o campo de email
+        # visível — uma deteção automática apanhava esses ecrãs como
+        # "login concluído" e capturava a sessão cedo demais, antes do
+        # login estar mesmo terminado. Pedir confirmação ao utilizador
+        # é mais simples e mais robusto do que tentar adivinhar todos os
+        # ecrãs possíveis.
+        print("Quando o login estiver mesmo concluído (já dentro da app),")
+        input("volta aqui e prime Enter...")
 
-        inicio = time.time()
-        logado = False
-        while time.time() - inicio < TIMEOUT_SEGUNDOS:
-            try:
-                sem_formulario = (
-                    "meudinheiroweb.com.br" in page.url
-                    and page.locator("input[name='email']").count() == 0
-                )
-            except Exception:
-                # A página pode estar a meio de uma navegação (ex: no
-                # instante exacto em que o login termina) — o Playwright
-                # lança um erro transitório nesse momento. Não é uma
-                # falha real, só significa "ainda não dá para confirmar
-                # agora"; tenta de novo no próximo ciclo.
-                time.sleep(2)
-                continue
-
-            if sem_formulario:
-                time.sleep(2)
-                try:
-                    ainda_sem_formulario = (
-                        "meudinheiroweb.com.br" in page.url
-                        and page.locator("input[name='email']").count() == 0
-                    )
-                except Exception:
-                    continue
-                if ainda_sem_formulario:
-                    logado = True
-                    break
-            time.sleep(2)
-
-        if not logado:
-            browser.close()
+        # Verificação de cortesia: avisa se ainda parecer estar no ecrã
+        # de login, mas não bloqueia — a decisão final é sempre do
+        # utilizador.
+        try:
+            ainda_com_formulario = (
+                page.locator("input[name='email']").count() > 0
+                or page.locator("input[type='password']").count() > 0
+            )
+        except Exception:
+            ainda_com_formulario = False
+        if ainda_com_formulario:
+            mostrar_aviso(page, "⚠️ Ainda vejo um formulário de login nesta página.", "#fd7e14")
             print()
-            print("❌ Não detectei o login dentro do tempo limite.")
-            print("   Corre o programa novamente e tenta outra vez.")
-            input("Prime Enter para sair...")
-            sys.exit(1)
+            print("⚠️  Ainda parece haver um formulário de login/senha nesta página.")
+            input("Confirma que já terminaste o login e prime Enter para continuar...")
 
         print()
-        print("✅ Login detectado! A enviar a sessão para a app...")
-        mostrar_aviso(page, "✅ Login detectado! A guardar a sessão, aguarda um momento...", "#0d6efd")
+        print("A enviar a sessão para a app...")
+        mostrar_aviso(page, "A guardar a sessão, aguarda um momento...", "#0d6efd")
 
         storage_state = context.storage_state()
 
