@@ -8,12 +8,19 @@ programar nem usar o Terminal — é só descarregar e executar.
 
 1. Descarrega o ficheiro da tua plataforma na página de
    [Releases](../../releases/latest):
-   - **Mac:** `RenovarSessaoSelectBuild-mac`
+   - **Mac:** `RenovarSessaoSelectBuild-mac.zip`
    - **Windows:** `RenovarSessaoSelectBuild-windows.exe`
-2. Executa o ficheiro (o sistema operativo pode mostrar um aviso de
-   "programa de origem não identificada" — isto é normal, porque a
-   ferramenta ainda não tem uma assinatura digital paga; escolhe
-   "Executar/Abrir mesmo assim").
+2. **Mac:** dá duplo-clique no `.zip` para descomprimir (o Mac faz isto
+   sozinho), depois clica com o botão direito no ficheiro
+   `RenovarSessaoSelectBuild-mac` → "Abrir". **Windows:** duplo-clique
+   directo no `.exe`. Em ambos os casos o sistema operativo mostra um
+   aviso de "origem não identificada" — é normal, porque a ferramenta
+   ainda não tem uma assinatura digital paga; escolhe "Abrir"/"Executar
+   mesmo assim".
+   - Nota técnica: o `.zip` no Mac não é só conveniência — é o que
+     preserva a permissão de executar do ficheiro. Um download directo
+     (sem zip) perde essa permissão e o Mac abre o ficheiro como texto
+     em vez de o correr.
 3. Vai abrir uma janela de terminal e, a seguir, uma janela de browser.
 4. Faz login no Meu Dinheiro com o **formulário de Email + Senha**
    (não uses o botão "Entrar com a Google" — esse é bloqueado).

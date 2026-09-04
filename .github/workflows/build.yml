@@ -20,10 +20,12 @@ jobs:
         include:
           - os: macos-latest
             nome_gerado: RenovarSessaoSelectBuild
-            nome_final: RenovarSessaoSelectBuild-mac
+            nome_final: RenovarSessaoSelectBuild-mac.zip
+            empacotar_zip: true
           - os: windows-latest
             nome_gerado: RenovarSessaoSelectBuild.exe
             nome_final: RenovarSessaoSelectBuild-windows.exe
+            empacotar_zip: false
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -57,7 +59,18 @@ jobs:
         shell: bash
         run: |
           mkdir -p saida
-          cp "dist/${{ matrix.nome_gerado }}" "saida/${{ matrix.nome_final }}"
+          if [ "${{ matrix.empacotar_zip }}" = "true" ]; then
+            # O download directo de um browser NÃO preserva a permissão
+            # de executar do Unix — sem isto, o duplo-clique no Mac abre
+            # o binário como texto em vez de o correr (já aconteceu).
+            # Um .zip guarda essa permissão, e o Mac descomprime sozinho.
+            chmod +x "dist/${{ matrix.nome_gerado }}"
+            cd dist
+            zip "../saida/${{ matrix.nome_final }}" "${{ matrix.nome_gerado }}"
+            cd ..
+          else
+            cp "dist/${{ matrix.nome_gerado }}" "saida/${{ matrix.nome_final }}"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
