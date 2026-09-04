@@ -10,6 +10,9 @@ on:
       - "v*"
   workflow_dispatch: {}
 
+permissions:
+  contents: write  # necessário para o passo "Publicar Release" criar a Release
+
 jobs:
   compilar:
     strategy:
