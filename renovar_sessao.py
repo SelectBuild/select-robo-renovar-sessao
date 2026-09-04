@@ -70,6 +70,30 @@ def mostrar_aviso(page, mensagem, cor):
         pass  # A janela pode já ter sido fechada pelo utilizador — sem problema.
 
 
+DOMINIO_SESSAO = "meudinheiroweb.com.br"
+
+
+def filtrar_storage_state(storage_state):
+    """Mantém no storage_state só o que pertence ao Meu Dinheiro.
+
+    context.storage_state() captura TUDO o que foi visitado dentro desta
+    janela do browser — se o utilizador abrir um separador novo aqui
+    dentro (ex: o Gmail, para ir buscar o código de confirmação), os
+    cookies e o localStorage desse site ficam misturados no mesmo
+    storage_state e seriam enviados e guardados também (no Secret
+    Manager), sem necessidade nenhuma e sem que ninguém dê por isso. Isto
+    corta essa gordura à nascença, mesmo que o aviso no Terminal não seja
+    respeitado.
+    """
+    cookies = [
+        c for c in storage_state.get("cookies", []) if DOMINIO_SESSAO in c.get("domain", "")
+    ]
+    origins = [
+        o for o in storage_state.get("origins", []) if DOMINIO_SESSAO in o.get("origin", "")
+    ]
+    return {"cookies": cookies, "origins": origins}
+
+
 def garantir_browser_instalado():
     """Na primeira vez que o programa corre, o Chromium ainda não está
     descarregado — o Playwright trata disso sozinho, só é preciso pedir
@@ -118,6 +142,11 @@ def main():
     print("preenche esse código também — só depois é que o login conta")
     print("como concluído.")
     print()
+    print("⚠️  Para ver esse código, usa OUTRO browser (ou o Mail/telemóvel) —")
+    print("    não abras o Gmail num separador novo DENTRO desta mesma janela.")
+    print("    Esta janela é só para o Meu Dinheiro; tudo o que abrires aqui")
+    print("    dentro (Gmail incluído) viaja junto na sessão enviada à app.")
+    print()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
@@ -162,13 +191,11 @@ def main():
         print("A enviar a sessão para a app...")
         mostrar_aviso(page, "A guardar a sessão, aguarda um momento...", "#0d6efd")
 
-        storage_state = context.storage_state()
+        storage_state = filtrar_storage_state(context.storage_state())
 
         # O envio acontece ainda com o browser aberto, para o resultado
-        # (sucesso ou falha) poder ser mostrado na própria janela antes
-        # de a fechar — não só no Terminal, que o utilizador pode nem
-        # estar a ver.
-        sucesso = False
+        # (sucesso ou falha) poder ser mostrado na própria janela — não
+        # só no Terminal, que o utilizador pode nem estar a ver.
         try:
             resposta = requests.put(
                 f"{ROBOT_API_URL}/sessao",
@@ -177,7 +204,6 @@ def main():
                 timeout=30,
             )
             if resposta.status_code == 200:
-                sucesso = True
                 print()
                 print("✅ Sessão renovada com sucesso!")
                 print("   O robô já vai usar esta sessão nova na próxima corrida.")
@@ -205,9 +231,14 @@ def main():
                 "#dc3545",
             )
 
-        if sucesso:
-            time.sleep(4)  # dá tempo para o utilizador ler o aviso antes de fechar
-        browser.close()
+        # Nunca fechamos o browser por conta própria — fica aberto até o
+        # utilizador o fechar manualmente, para ele poder ler o aviso com
+        # calma (ou copiar o erro, se algo tiver corrido mal) sem pressa
+        # nem susto de a janela desaparecer sozinha.
+        print()
+        print("A janela do browser fica aberta — fecha-a quando quiseres.")
+        while browser.is_connected():
+            time.sleep(1)
 
     input("Prime Enter para sair...")
 
