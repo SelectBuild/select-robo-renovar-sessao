@@ -7,8 +7,11 @@ para a app do Robô Select. Não precisa de Terminal nem de saber
 programar — é só correr o programa.
 """
 
+import contextlib
+import itertools
 import os
 import sys
+import threading
 import time
 
 # TEM de ser definido ANTES de importar o playwright, e antes de
@@ -70,6 +73,40 @@ def mostrar_aviso(page, mensagem, cor):
         pass  # A janela pode já ter sido fechada pelo utilizador — sem problema.
 
 
+@contextlib.contextmanager
+def com_spinner(mensagem):
+    """Mostra um spinner de texto na mesma linha enquanto o bloco `with`
+    não termina — o trabalho em si continua a correr todo na thread
+    principal (só a animação corre à parte); é só sinal de vida.
+
+    Há passos (verificar se o browser já está instalado, abrir a janela
+    do Meu Dinheiro) que não têm nenhum output próprio e podem demorar
+    alguns segundos — sem isto, o Terminal fica com um ecrã em branco
+    parado, sem se perceber se está a fazer alguma coisa ou se travou.
+
+    Importante: o código Playwright chamado dentro do `with` TEM de
+    continuar a correr na thread principal — a API síncrona do Playwright
+    não aceita ser chamada de outra thread (dá erro de greenlet). Por
+    isso é só a animação que corre num fio à parte, nunca o trabalho.
+    """
+    parar = threading.Event()
+
+    def animar():
+        for caractere in itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"):
+            if parar.wait(timeout=0.1):
+                break
+            print(f"\r{caractere} {mensagem}", end="", flush=True)
+        print("\r" + " " * (len(mensagem) + 4) + "\r", end="", flush=True)  # limpa a linha
+
+    fio = threading.Thread(target=animar, daemon=True)
+    fio.start()
+    try:
+        yield
+    finally:
+        parar.set()
+        fio.join()
+
+
 DOMINIO_SESSAO = "meudinheiroweb.com.br"
 
 
@@ -98,13 +135,17 @@ def garantir_browser_instalado():
     """Na primeira vez que o programa corre, o Chromium ainda não está
     descarregado — o Playwright trata disso sozinho, só é preciso pedir
     explicitamente (o download é de uns 150 MB, só acontece uma vez)."""
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            browser.close()
+    ja_instalado = False
+    with com_spinner("A verificar o browser..."):
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                browser.close()
+            ja_instalado = True
+        except Exception:
+            pass
+    if ja_instalado:
         return
-    except Exception:
-        pass
 
     print("Primeira utilização — a preparar o browser (só demora da primeira vez)...")
     # Chama a instalação directamente no mesmo processo (não por
@@ -149,10 +190,11 @@ def main():
     print()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
-        page.goto("https://app.meudinheiroweb.com.br")
+        with com_spinner("Aguarda, vamos abrir o Meu Dinheiro..."):
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+            page.goto("https://app.meudinheiroweb.com.br")
         mostrar_aviso(
             page,
             "👋 Faz login (inclui o código de confirmação, se for pedido). "
