@@ -38,6 +38,39 @@ SESSAO_UPLOAD_KEY = "__SESSAO_UPLOAD_KEY_PLACEHOLDER__"
 
 TIMEOUT_SEGUNDOS = 600  # 10 minutos para o utilizador fazer login com calma
 
+# Mostra um aviso grande dentro da própria janela do browser — é para
+# ali que o utilizador está a olhar durante o login, não para o
+# Terminal por trás. Sem isto, a janela fechava-se sozinha sem
+# nenhuma confirmação visível de que tinha corrido bem (ou mal).
+JS_MOSTRAR_AVISO = """([mensagem, cor]) => {
+    let el = document.getElementById('__select_build_aviso__');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = '__select_build_aviso__';
+        el.style.position = 'fixed';
+        el.style.top = '0';
+        el.style.left = '0';
+        el.style.right = '0';
+        el.style.zIndex = '2147483647';
+        el.style.padding = '28px 20px';
+        el.style.fontSize = '20px';
+        el.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+        el.style.textAlign = 'center';
+        el.style.color = 'white';
+        el.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)';
+        document.body.appendChild(el);
+    }
+    el.style.background = cor;
+    el.textContent = mensagem;
+}"""
+
+
+def mostrar_aviso(page, mensagem, cor):
+    try:
+        page.evaluate(JS_MOSTRAR_AVISO, [mensagem, cor])
+    except Exception:
+        pass  # A janela pode já ter sido fechada pelo utilizador — sem problema.
+
 
 def garantir_browser_instalado():
     """Na primeira vez que o programa corre, o Chromium ainda não está
@@ -134,29 +167,54 @@ def main():
 
         print()
         print("✅ Login detectado! A enviar a sessão para a app...")
+        mostrar_aviso(page, "✅ Login detectado! A guardar a sessão, aguarda um momento...", "#0d6efd")
 
         storage_state = context.storage_state()
-        browser.close()
 
-    try:
-        resposta = requests.put(
-            f"{ROBOT_API_URL}/sessao",
-            headers={"X-API-Key": SESSAO_UPLOAD_KEY, "Content-Type": "application/json"},
-            json={"storage_state": storage_state},
-            timeout=30,
-        )
-        if resposta.status_code == 200:
+        # O envio acontece ainda com o browser aberto, para o resultado
+        # (sucesso ou falha) poder ser mostrado na própria janela antes
+        # de a fechar — não só no Terminal, que o utilizador pode nem
+        # estar a ver.
+        sucesso = False
+        try:
+            resposta = requests.put(
+                f"{ROBOT_API_URL}/sessao",
+                headers={"X-API-Key": SESSAO_UPLOAD_KEY, "Content-Type": "application/json"},
+                json={"storage_state": storage_state},
+                timeout=30,
+            )
+            if resposta.status_code == 200:
+                sucesso = True
+                print()
+                print("✅ Sessão renovada com sucesso!")
+                print("   O robô já vai usar esta sessão nova na próxima corrida.")
+                mostrar_aviso(
+                    page,
+                    "✅ Sessão renovada com sucesso! Já podes fechar esta janela.",
+                    "#198754",
+                )
+            else:
+                print()
+                print(f"❌ A app recusou a sessão (código {resposta.status_code}):")
+                print(f"   {resposta.text}")
+                mostrar_aviso(
+                    page,
+                    "❌ A app recusou a sessão. Fecha esta janela e avisa a Select Build.",
+                    "#dc3545",
+                )
+        except Exception as erro:
             print()
-            print("✅ Sessão renovada com sucesso!")
-            print("   O robô já vai usar esta sessão nova na próxima corrida.")
-        else:
-            print()
-            print(f"❌ A app recusou a sessão (código {resposta.status_code}):")
-            print(f"   {resposta.text}")
-    except Exception as erro:
-        print()
-        print(f"❌ Não consegui contactar a app: {erro}")
-        print("   Verifica a tua ligação à internet e tenta novamente.")
+            print(f"❌ Não consegui contactar a app: {erro}")
+            print("   Verifica a tua ligação à internet e tenta novamente.")
+            mostrar_aviso(
+                page,
+                "❌ Falha de ligação à app. Fecha esta janela e tenta novamente.",
+                "#dc3545",
+            )
+
+        if sucesso:
+            time.sleep(4)  # dá tempo para o utilizador ler o aviso antes de fechar
+        browser.close()
 
     input("Prime Enter para sair...")
 
